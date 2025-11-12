@@ -1,49 +1,50 @@
 const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcryptjs');
-const User = require('../models/UserModel');
-const generateToken = require('../utils/generateToken');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 
-// @desc    Register a new user
-// @route   POST /api/users/register
+// Generate JWT Token
+const generateToken = (id, role) => {
+  return jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+};
+
+// @desc    Register new user
+// @route   POST /api/user/register
 // @access  Public
 const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, role } = req.body;
 
-  // 1. Check if user already exists
+  if (!name || !email || !password || !role) {
+    res.status(400);
+    throw new Error('Please fill all fields');
+  }
+
+  // Check if user exists
   const userExists = await User.findOne({ email });
-
   if (userExists) {
-    res.status(400); // Bad Request
+    res.status(400);
     throw new Error('User already exists');
   }
-  
-  // 2. Check for @igdtuw.ac.in (the model does this, but good to double-check)
-  if (!email.endsWith('@igdtuw.ac.in')) {
-     res.status(400);
-     throw new Error('Please use your college email.');
-  }
 
-  // 3. Hash the password
+  // Hash password
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
-  // 4. Create the new user in the database
+  // Create user
   const user = await User.create({
     name,
     email,
     password: hashedPassword,
+    role,
   });
 
   if (user) {
-    // 5. Generate a token and set the cookie
-    generateToken(res, user._id);
-
-    // 6. Send user data back (without the password)
     res.status(201).json({
-      _id: user._id,
+      _id: user.id,
       name: user.name,
       email: user.email,
-      profilePic: user.profilePic,
+      role: user.role,
+      token: generateToken(user._id, user.role),
     });
   } else {
     res.status(400);
@@ -51,48 +52,27 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 });
 
-// @desc    Auth user (login) & get token
-// @route   POST /api/users/login
+// @desc    Login user
+// @route   POST /api/user/login
 // @access  Public
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  // 1. Find the user by email
+  // Check for user
   const user = await User.findOne({ email });
 
-  // 2. Check if user exists AND if passwords match
   if (user && (await bcrypt.compare(password, user.password))) {
-    // 3. Generate a token and set the cookie
-    generateToken(res, user._id);
-
-    // 4. Send user data back
-    res.status(200).json({
-      _id: user._id,
+    res.json({
+      _id: user.id,
       name: user.name,
       email: user.email,
-      profilePic: user.profilePic,
+      role: user.role,
+      token: generateToken(user._id, user.role),
     });
   } else {
-    res.status(401); // Unauthorized
+    res.status(401);
     throw new Error('Invalid email or password');
   }
 });
 
-// @desc    Logout user & clear cookie
-// @route   POST /api/users/logout
-// @access  Private (must be logged in)
-const logoutUser = asyncHandler(async (req, res) => {
-  // We clear the cookie by setting it to an empty value and making it expire immediately.
-  res.cookie('jwt', '', {
-    httpOnly: true,
-    expires: new Date(0), // Expire right now
-  });
-
-  res.status(200).json({ message: 'User logged out successfully' });
-});
-
-module.exports = {
-  registerUser,
-  loginUser,  
-  logoutUser, 
-};
+module.exports = { registerUser, loginUser };

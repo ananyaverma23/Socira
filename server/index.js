@@ -1,10 +1,13 @@
 require('dotenv').config();
 
 const express = require('express');
+const path = require("path");
 const cors = require('cors');
 const mongoose = require('mongoose');
 const userRoutes = require('./routes/userRoutes');
-const { notFound, errorHandler } = require('./middleware/errorMiddleware');
+const eventRoutes = require("./routes/eventRoutes");
+const { notFound, errorHandler } = require("./middleware/errorMiddleware");
+const uploadRoutes = require("./routes/uploadRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -22,14 +25,22 @@ mongoose.connect(MONGO_URI)
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); 
+// ✅ Serve uploaded images statically
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Routes
-app.get('/api/test', (req, res) => {
+//Test Routes
+app.get('/test', (req, res) => {
   res.json({ message: '✅ Backend and Frontend are connected!' });
 });
 
-app.use('/api/users', userRoutes);
+//User Routes
+app.use('/api/user', userRoutes);
+
+//Event Routes
+app.use("/api/events", eventRoutes);
+
+app.use("/api/upload", uploadRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
